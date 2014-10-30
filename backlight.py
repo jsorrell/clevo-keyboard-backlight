@@ -3,17 +3,24 @@ from tkinter import *
 import sys
 import os
 import collections
+import subprocess
 
+wmi_location = "/sys/devices/platform/clevo_wmi/kbled"
+wmi_install_location = "clevo_wmi_code"
+wmi_url = "git://git.code.sf.net/p/clevo-wmi/code"
+
+full_wmi_install_location = os.path.join(os.path.dirname(__file__),
+                                         wmi_install_location)
 
 COLORMAP = collections.OrderedDict()
-COLORMAP["black"]  = "000"
-COLORMAP["white"]  = "111"
+COLORMAP["black"]       = "000"
+COLORMAP["white"]       = "111"
 COLORMAP["lime green"]  = "100"
-COLORMAP["red"]    = "010"
-COLORMAP["blue"]   = "001"
-COLORMAP["yellow"] = "110"
-COLORMAP["magenta"] = "011"
-COLORMAP["aqua"]   = "101"
+COLORMAP["red"]         = "010"
+COLORMAP["blue"]        = "001"
+COLORMAP["yellow"]      = "110"
+COLORMAP["magenta"]     = "011"
+COLORMAP["aqua"]        = "101"
 
 class ColoredRectangleButton(Canvas):
   colors = []
@@ -50,7 +57,7 @@ class PartialKeyboardController(Frame):
     self.side = side
   def onColorChosen(self,color):
     try:
-      fd = os.open("/sys/devices/platform/clevo_wmi/kbled/"+self.side,os.O_WRONLY)
+      fd = os.open(wmi_location+"/"+self.side,os.O_WRONLY)
       os.write(fd,bytes(COLORMAP[color]+"\n", 'UTF-8'))
 
     except PermissionError:
@@ -66,7 +73,7 @@ class BrightnessController(Scale):
                                orient="vertical",
                                command=self.updateValue)
     try:
-      f = open("/sys/devices/platform/clevo_wmi/kbled/brightness","r")
+      f = open(wmi_location+"/brightness","r")
       self.set(int(f.readline()))
     except PermissionError:
       sys.exit("needs to be run as root!")
@@ -74,23 +81,48 @@ class BrightnessController(Scale):
       f.close()
   def updateValue(self,event):
     try:
-      fd = os.open("/sys/devices/platform/clevo_wmi/kbled/brightness",os.O_WRONLY)
+      fd = os.open(wmi_location+"/brightness",os.O_WRONLY)
       os.write(fd,bytes(str(self.get())+"\n", 'UTF-8'))
     except PermissionError:
       sys.exit("needs to be run as root!")
     else:
       os.close(fd)
 
+def initView(master):
+  master.wm_title("Keyboard Color Picker")
+  master.geometry('+40+80')
+  BrightnessController(root).grid(row=0,column=0,rowspan=3)
+  Label(master,text="Choose Left Color").grid(row=0,column=1)
+  PartialKeyboardController(master,"left").grid(row=1, column=1, padx=10)
+  Label(master,text="Choose Middle Color").grid(row=0,column=2)
+  PartialKeyboardController(master,"middle").grid(row=1, column=2, padx=10)
+  Label(master,text="Choose Right Color").grid(row=0,column=3)
+  PartialKeyboardController(master,"right").grid(row=1, column=3, padx=10)
 
+def installWMI():
+  if os.path.isdir(wmi_location):
+    return
+  else:
+    print("Installing WMI")
+    if not os.path.isdir(wmi_install_location):
+      cloneStatus = subprocess.call(["git","clone",wmi_url,full_wmi_install_location])
+      if cloneStatus == 127:
+        sys.exit("needs git to clone wmi")
+      elif cloneStatus != 0:
+        sys.exit("error cloning wmi")
+    r = subprocess.call(["make","-C",full_wmi_install_location])
+    if r != 0:
+      sys.exit("error making wmi")
+    r = subprocess.call(["insmod",full_wmi_install_location+"/clevo_wmi.ko"])
+    if r != 0:
+      sys.exit("error installing wmi")
+    return
+
+# make sure user is root
+if os.geteuid() != 0:
+  sys.exit('needs to be run as root!')
+
+installWMI()
 root = Tk()
-root.wm_title("Keyboard Color Picker")
-root.geometry('+40+80')
-BrightnessController(root).grid(row=0,column=0,rowspan=3)
-Label(root,text="Choose Left Color").grid(row=0,column=1)
-PartialKeyboardController(root,"left").grid(row=1, column=1, padx=10)
-Label(root,text="Choose Middle Color").grid(row=0,column=2)
-PartialKeyboardController(root,"middle").grid(row=1, column=2, padx=10)
-Label(root,text="Choose Right Color").grid(row=0,column=3)
-PartialKeyboardController(root,"right").grid(row=1, column=3, padx=10)
-
+initView(root)
 root.mainloop()
