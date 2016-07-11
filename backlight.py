@@ -104,7 +104,7 @@ def installWMI():
     return
   else:
     print("Installing WMI")
-    if not os.path.isdir(wmi_install_location):
+    if not os.path.isdir(full_wmi_install_location):
       cloneStatus = subprocess.call(["git","clone",wmi_url,full_wmi_install_location])
       if cloneStatus == 127:
         sys.exit("needs git to clone wmi")
